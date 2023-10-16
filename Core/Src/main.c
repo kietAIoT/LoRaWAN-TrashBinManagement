@@ -21,7 +21,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "LoRa.h"
+#include "string.h"
+#include "stdio.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -66,6 +68,7 @@ void KIET_configure_rtc_register();
 void KIET_revise();
 //void KIET_configure_rtc_register();
 void KIET_reset_rtc_register();
+void KIET_EnterStandBy();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -77,6 +80,13 @@ int _write(int file, char *ptr, int len) {
 	}
 	return len;
 }
+
+LoRa myLoRa;
+uint8_t read_data[128];
+uint8_t send_data[128];
+char data[] = "abc";
+int			RSSI;
+
 /* USER CODE END 0 */
 
 /**
@@ -108,10 +118,46 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_I2C2_Init();
-//  MX_RTC_Init();
+  MX_RTC_Init();
   MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
   KIET_RTC_Init();
+  myLoRa = newLoRa();
+  //	LoRa_reset(&myLoRa);
+
+	myLoRa.hSPIx                 = &hspi1;
+	myLoRa.CS_port               = NSS_GPIO_Port;
+	myLoRa.CS_pin                = NSS_Pin;
+	myLoRa.reset_port            = RST_GPIO_Port;
+	myLoRa.reset_pin             = RST_Pin;
+	myLoRa.DIO0_port			 = DIO0_GPIO_Port;
+	myLoRa.DIO0_pin				 = DIO0_Pin;
+	myLoRa.frequency             = 433;							  // default = 433 MHz
+	myLoRa.spredingFactor        = SF_7;							// default = SF_7
+	myLoRa.bandWidth			 = BW_125KHz;				  // default = BW_125KHz
+	myLoRa.crcRate				 = CR_4_5;						// default = CR_4_5
+	myLoRa.power				 = POWER_11db;				// default = 20db
+	myLoRa.overCurrentProtection = 120; 							// default = 100 mA
+	myLoRa.preamble				 = 8;		  					// default = 8;
+
+	LoRa_reset(&myLoRa);
+
+	uint16_t loraStatus= LoRa_init(&myLoRa);
+	for (uint8_t i = 0; i<= 127; i++) {
+		printf("%i--%d\n",i,LoRa_read(&myLoRa, i));
+	}
+	if (loraStatus==LORA_OK) {
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);
+		HAL_Delay(100);
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);
+	} else {
+		for (uint8_t i = 0; i<= 10; i++) {
+			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);
+			HAL_Delay(100);
+			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);
+			HAL_Delay(100);
+		}
+	}
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -119,7 +165,20 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
+
     /* USER CODE BEGIN 3 */
+	  SET_BIT(PWR->CR, PWR_CR_CWUF);
+
+	  send_data[0] = 0x3B; // MY ADDRESS
+	  for(int i=0; i<26; i++) send_data[i+1] = 48+i;
+	  uint8_t flag = LoRa_transmit(&myLoRa, send_data, 3, 1000);
+	  if (flag) {
+			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
+			HAL_Delay(100);
+			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
+			HAL_Delay(100);
+	  }
+
 	  KIET_ToggleLED();
 	  HAL_Delay(100);
 	  	printf("CHECK RTC_CRL_ALRG %d\n", READ_BIT(RTC->CRL, RTC_CRL_ALRF));
@@ -130,9 +189,9 @@ int main(void)
 	  		printf("Alter alrm");
 	  		CLEAR_BIT(RTC->CRL, RTC_CRL_ALRF);
 	  		KIET_revise();
-	  		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, SET);
+	  		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
 	  		HAL_Delay(100);
-	  		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, RESET);
+	  		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
 	  	}
   }
   /* USER CODE END 3 */
@@ -306,10 +365,39 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(NSS_GPIO_Port, NSS_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : PB9 */
-  GPIO_InitStruct.Pin = GPIO_PIN_9;
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(RST_GPIO_Port, RST_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, LED2_Pin|LED1_Pin|GPIO_PIN_7|GPIO_PIN_8
+                          |GPIO_PIN_9, GPIO_PIN_SET);
+
+  /*Configure GPIO pin : DIO0_Pin */
+  GPIO_InitStruct.Pin = DIO0_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(DIO0_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : NSS_Pin */
+  GPIO_InitStruct.Pin = NSS_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(NSS_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : RST_Pin */
+  GPIO_InitStruct.Pin = RST_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(RST_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : LED2_Pin LED1_Pin PB7 PB8
+                           PB9 */
+  GPIO_InitStruct.Pin = LED2_Pin|LED1_Pin|GPIO_PIN_7|GPIO_PIN_8
+                          |GPIO_PIN_9;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -423,7 +511,24 @@ void KIET_ToggleLED() {
 	HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_9);
 }
 
+void KIET_EnterStandBy() {
+	printf("Entering StandBy");
+	HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN1);
+	HAL_PWR_EnterSTANDBYMode();
+}
 
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
+	if (GPIO_Pin == myLoRa.DIO0_pin) {
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
+		HAL_Delay(100);
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
+		HAL_Delay(100);
+		LoRa_receive(&myLoRa, read_data, 128);
+	} else {
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
+	}
+	printf("Callback");
+}
 /* USER CODE END 4 */
 
 /**
