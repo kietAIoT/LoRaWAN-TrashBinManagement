@@ -125,5 +125,5 @@ void LoRa_startReceiving(LoRa* _LoRa);
 uint8_t LoRa_receive(LoRa* _LoRa, uint8_t* data, uint8_t length);
 void LoRa_receive_IT(LoRa* _LoRa, uint8_t* data, uint8_t length);
 int LoRa_getRSSI(LoRa* _LoRa);
-
+void LoRa_gotoSleep();
 uint16_t LoRa_init(LoRa* _LoRa);

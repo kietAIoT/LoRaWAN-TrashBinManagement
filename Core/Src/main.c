@@ -34,7 +34,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define NUM_OF_TIME_TRANSMIT 3
+#define TIME_TRANSMIT		 1000
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -49,6 +50,8 @@ RTC_HandleTypeDef hrtc;
 
 SPI_HandleTypeDef hspi1;
 
+UART_HandleTypeDef huart1;
+
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -59,6 +62,7 @@ static void MX_GPIO_Init(void);
 static void MX_I2C2_Init(void);
 static void MX_RTC_Init(void);
 static void MX_SPI1_Init(void);
+static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 void KIET_BlinkLED();
@@ -74,6 +78,8 @@ void KIET_readSensor();
 void KIET_encryptData();
 void KIET_macLayer();
 void KIET_macID();
+void KIET_control_low_power_lora();
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -123,8 +129,9 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_I2C2_Init();
-  MX_RTC_Init();
+//  MX_RTC_Init();
   MX_SPI1_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
   KIET_RTC_Init();
   myLoRa = newLoRa();
@@ -183,18 +190,23 @@ int main(void)
 	  KIET_encryptData();
 	  KIET_macLayer();
 	  KIET_macID();
-
+	  /*Create Data;*/
 	  send_data[0] = 0x30; // MY ADDRESS
 	  for(int i=0; i<26; i++) send_data[i+1] = 48+i;
-	  uint8_t flag = LoRa_transmit(&myLoRa, send_data, 4, 1000);
-	  if (flag) {
-			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);
-			HAL_Delay(100);
-			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);
-			HAL_Delay(100);
-	  }
 
+	  /*Transmit Data*/
+		  for (uint8_t i; i < NUM_OF_TIME_TRANSMIT; i++) {
+		  	  uint8_t flag = LoRa_transmit(&myLoRa, send_data, 4, 1000);
+			  if (flag) {
+					HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);
+					HAL_Delay(100);
+					HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);
+					HAL_Delay(100);
+			  } else {printf("Failed to transmit data\n");}
+			  HAL_Delay(TIME_TRANSMIT);
+		  }
 	  HAL_Delay(2000);
+	  /*Receive Data*/
 	  LoRa_receive(&myLoRa, read_data, 128);
 	  printf("RECEIVE\n");
 	  if (read_data[0] != 0) {
@@ -206,6 +218,8 @@ int main(void)
 	  } else {
 				;
 	  }
+
+	  /*Draf Debug*/
 	  KIET_ToggleLED();
 	  HAL_Delay(100);
 	  	printf("CHECK RTC_CRL_ALRG %d\n", READ_BIT(RTC->CRL, RTC_CRL_ALRF));
@@ -220,6 +234,7 @@ int main(void)
 	  		HAL_Delay(100);
 	  		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
 	  	}
+	  /*Reset counter to zero*/
 	  KIET_revise();
 	  printf("#GRN#GO TO STAND BY!-!\n");
 	  KIET_EnterStandBy();
@@ -378,6 +393,39 @@ static void MX_SPI1_Init(void)
 }
 
 /**
+  * @brief USART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART1_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART1_Init 0 */
+
+  /* USER CODE END USART1_Init 0 */
+
+  /* USER CODE BEGIN USART1_Init 1 */
+
+  /* USER CODE END USART1_Init 1 */
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 115200;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART1_Init 2 */
+
+  /* USER CODE END USART1_Init 2 */
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -476,8 +524,6 @@ void KIET_RTC_Init(){
 	 * 10: LSI oscillator clock used as RTC clock
 	 * 11: HSE oscillator clock divided by 128 used as RTC clock*/
 
-
-
 	KIET_configure_rtc_register();
 }
 
@@ -549,6 +595,31 @@ void KIET_EnterStandBy() {
 	printf("Entering StandBy");
 	HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN1);
 	HAL_PWR_EnterSTANDBYMode();
+}
+
+void KIET_readSensor() {
+	;
+}
+
+void KIET_encryptData() {
+	;
+}
+
+void KIET_macLayer() {
+	;
+}
+
+void KIET_macID() {
+	;
+}
+
+void KIET_control_low_power_lora() {
+
+	;
+	//	A low battery detector is also included allowing the generation of an interrupt signal in response to the supply voltage
+	//	dropping below a programmable threshold that is adjustable through the register RegLowBat. The interrupt signal can be
+	//	mapped to any of the DIO pins by programming RegDioMapping.
+
 }
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
