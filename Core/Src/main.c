@@ -122,8 +122,18 @@ int main(void)
     /* USER CODE BEGIN 3 */
 	  KIET_ToggleLED();
 	  HAL_Delay(100);
-	  printf("CHEKC RTC_ DIVH %d, and DIVL: %d\n ", RTC->DIVH ,RTC->DIVL);
-
+	  	printf("CHECK RTC_CRL_ALRG %d\n", READ_BIT(RTC->CRL, RTC_CRL_ALRF));
+	  	printf("CHEKC RTC_ DIVH %d, and DIVL: %d\n ", RTC->DIVH ,RTC->DIVL);
+	  	printf("CHEKC RTC_ CNTH  %d, and CNTL: %d\n" , RTC->CNTH ,RTC->CNTL);
+	  	printf("CHEKC RTC_ ANRL: %d, and ANRH: %d\n" , RTC->ALRH ,RTC->ALRL);
+	  	if (READ_BIT(RTC->CRL, RTC_CRL_ALRF)!=0) {
+	  		printf("Alter alrm");
+	  		CLEAR_BIT(RTC->CRL, RTC_CRL_ALRF);
+	  		KIET_revise();
+	  		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, SET);
+	  		HAL_Delay(100);
+	  		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, RESET);
+	  	}
   }
   /* USER CODE END 3 */
 }
@@ -389,8 +399,8 @@ void KIET_revise() {
 		while (READ_BIT(RTC->CRL, RTC_CRL_RTOFF)==0) {printf("HAL_L1_Check RTOFF\n");}
 		SET_BIT(RTC->CRL, RTC_CRL_CNF);
 		/*Begin for writing to RTC Register - Write one or more RTC register*/
-	//	RTC->DIVH = 0x0000U;
-	//	RTC->DIVL = 0x8000U;
+		RTC->DIVH = 0x0000U;
+		RTC->DIVL = 0x8000U;
 		RTC->CNTH = 0x0000U;
 		RTC->CNTL = 0x0000U;
 		/*End of writing to RTC register*/
