@@ -24,6 +24,7 @@
 #include "LoRa.h"
 #include "string.h"
 #include "stdio.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -69,6 +70,10 @@ void KIET_revise();
 //void KIET_configure_rtc_register();
 void KIET_reset_rtc_register();
 void KIET_EnterStandBy();
+void KIET_readSensor();
+void KIET_encryptData();
+void KIET_macLayer();
+void KIET_macID();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -81,11 +86,11 @@ int _write(int file, char *ptr, int len) {
 	return len;
 }
 
-LoRa myLoRa;
+LoRa	myLoRa;
 uint8_t read_data[128];
 uint8_t send_data[128];
-char data[] = "abc";
-int			RSSI;
+char 	data[] = "abc";
+int		RSSI;
 
 /* USER CODE END 0 */
 
@@ -146,6 +151,7 @@ int main(void)
 	for (uint8_t i = 0; i<= 127; i++) {
 		printf("%i--%d\n",i,LoRa_read(&myLoRa, i));
 	}
+
 	if (loraStatus==LORA_OK) {
 		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);
 		HAL_Delay(100);
@@ -158,27 +164,48 @@ int main(void)
 			HAL_Delay(100);
 		}
 	}
+	printf("CHECK POINT 5\n");
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  printf("#ORG# I AM RUNNING!-!\n");
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
 	  SET_BIT(PWR->CR, PWR_CR_CWUF);
 
-	  send_data[0] = 0x3B; // MY ADDRESS
+	  /*Do somthing when WAKUP*/
+
+	  KIET_readSensor();
+	  KIET_encryptData();
+	  KIET_macLayer();
+	  KIET_macID();
+
+	  send_data[0] = 0x30; // MY ADDRESS
 	  for(int i=0; i<26; i++) send_data[i+1] = 48+i;
-	  uint8_t flag = LoRa_transmit(&myLoRa, send_data, 3, 1000);
+	  uint8_t flag = LoRa_transmit(&myLoRa, send_data, 4, 1000);
 	  if (flag) {
-			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
+			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);
 			HAL_Delay(100);
-			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);
 			HAL_Delay(100);
 	  }
 
+	  HAL_Delay(2000);
+	  LoRa_receive(&myLoRa, read_data, 128);
+	  printf("RECEIVE\n");
+	  if (read_data[0] != 0) {
+				printf("Receive Data\n");
+				printf("%ul",read_data[0]);
+				printf("%c", read_data[0]);
+				printf("%c", read_data[1]);
+				memset(read_data, 0, sizeof(read_data));
+	  } else {
+				;
+	  }
 	  KIET_ToggleLED();
 	  HAL_Delay(100);
 	  	printf("CHECK RTC_CRL_ALRG %d\n", READ_BIT(RTC->CRL, RTC_CRL_ALRF));
@@ -193,6 +220,9 @@ int main(void)
 	  		HAL_Delay(100);
 	  		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
 	  	}
+	  KIET_revise();
+	  printf("#GRN#GO TO STAND BY!-!\n");
+	  KIET_EnterStandBy();
   }
   /* USER CODE END 3 */
 }
@@ -403,6 +433,10 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI1_IRQn, 1, 0);
+  HAL_NVIC_EnableIRQ(EXTI1_IRQn);
+
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
 }
@@ -470,7 +504,7 @@ void KIET_configure_rtc_register() {
 	RTC->CNTL = 0x0000U;
 
 	RTC->ALRH = 0x0000U;
-	RTC->ALRL = 0x0004U;
+	RTC->ALRL = 0x000FU;
 	SET_BIT(RTC->CRH, RTC_CRH_ALRIE);
 	SET_BIT(RTC->CRH, RTC_CRH_OWIE);
 	//	SET_BIT(RTC->CRH, RTC_CRH_SECIE);
@@ -518,16 +552,16 @@ void KIET_EnterStandBy() {
 }
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
-	if (GPIO_Pin == myLoRa.DIO0_pin) {
-		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
-		HAL_Delay(100);
-		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
-		HAL_Delay(100);
-		LoRa_receive(&myLoRa, read_data, 128);
-	} else {
-		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
-	}
-	printf("Callback");
+//	if (GPIO_Pin == myLoRa.DIO0_pin) {
+//		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
+//		HAL_Delay(100);
+//		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
+//		HAL_Delay(100);
+//		LoRa_receive(&myLoRa, read_data, 128);
+//	} else {
+//		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
+//	}
+	printf("#RED# Callback");
 }
 /* USER CODE END 4 */
 
