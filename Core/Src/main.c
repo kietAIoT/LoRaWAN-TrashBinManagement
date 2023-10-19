@@ -15,6 +15,7 @@
   *
   ******************************************************************************
   */
+
 #define NOT_NESCESSARY
 #ifdef 	NOT_NESCESSARY
 /* USER CODE END Header */
@@ -197,26 +198,32 @@ int main(void)
 	  SET_BIT(PWR->CR, PWR_CR_CWUF);
 
 	  /*Do somthing when WAKUP*/
-
-	  printf("ReadSensor -> Distance = %d\n", KIET_VL53L0X_ReadDistance());
-//	  KIET_encryptData();
-//	  KIET_macLayer();
-//	  KIET_macID();
+	  uint16_t distance =  KIET_VL53L0X_ReadDistance();
+	  printf("ReadSensor -> Distance = %d\n",distance);
+	  KIET_encryptData();
+	  KIET_macLayer();
+	  KIET_macID();
 	  /*Create Data;*/
-	  send_data[0] = 0x30; // MY ADDRESS
-	  for(int i=0; i<26; i++) send_data[i+1] = 48+i;
+	  send_data[4] = 0x00;
+	  send_data[3] = (distance%10)	 	+ 0x30;
+	  send_data[2] = (distance/10)%10  	+ 0x30;
+	  send_data[1] = (distance/100)%10 	+ 0x30;
+	  send_data[0] = (distance/1000)%10 + 0x30; // MY ADDRESS
 
 	  /*Transmit Data*/
-		  for (uint8_t i; i < NUM_OF_TIME_TRANSMIT; i++) {
-		  	  uint8_t flag = LoRa_transmit(&myLoRa, send_data, 4, 2000);
-			  if (flag) {
-					HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);
-					HAL_Delay(100);
-					HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);
-					HAL_Delay(100);
-			  } else {printf("Failed to transmit data\n");}
-			  HAL_Delay(TIME_TRANSMIT);
-		  }
+	  printf("Transmit\n");
+	  for (uint8_t i =0; i < NUM_OF_TIME_TRANSMIT; i++) {
+		  uint8_t flag = LoRa_transmit(&myLoRa, send_data, 5, 1000);
+		  if (flag) {
+				printf("Have send message");
+				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);
+				HAL_Delay(100);
+				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);
+				HAL_Delay(100);
+		  } else {printf("Failed to transmit data\n");}
+		  HAL_Delay(TIME_TRANSMIT);
+	  }
+
 	  HAL_Delay(2000);
 	  /*Receive Data*/
 	  LoRa_receive(&myLoRa, read_data, 128);
@@ -702,7 +709,6 @@ uint16_t KIET_VL53L0X_ReadDistance() {
 	uint32_t sum = 0;
 	for (uint8_t i=0; i<=19; i++) {
 		data_distance[i] = KIET_COMPUTE_Constraint(readRangeSingleMillimeters(&status), 0, 2000);
-//		HAL_Delay(1);
 		sum+=data_distance[i];
 		printf("Reading Data From VL53L0X -->distance: %dmm\n", data_distance[i]);
 	}
