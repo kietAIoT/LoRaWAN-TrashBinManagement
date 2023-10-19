@@ -35,5 +35,10 @@
 			<type>2</type>
 			<location>F:/Workspace/21_EmbeddedSystem/BIN_System_LoRaWAN/LoRa</location>
 		</link>
+		<link>
+			<name>VL53L0X</name>
+			<type>2</type>
+			<location>F:/Workspace/21_EmbeddedSystem/BIN_System_LoRaWAN/VL53L0X</location>
+		</link>
 	</linkedResources>
 </projectDescription>

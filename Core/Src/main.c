@@ -15,6 +15,8 @@
   *
   ******************************************************************************
   */
+#define NOT_NESCESSARY
+#ifdef 	NOT_NESCESSARY
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
@@ -24,7 +26,7 @@
 #include "LoRa.h"
 #include "string.h"
 #include "stdio.h"
-
+#include "VL53L0X.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -44,6 +46,7 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+I2C_HandleTypeDef hi2c1;
 I2C_HandleTypeDef hi2c2;
 
 RTC_HandleTypeDef hrtc;
@@ -63,6 +66,7 @@ static void MX_I2C2_Init(void);
 static void MX_RTC_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_USART1_UART_Init(void);
+static void MX_I2C1_Init(void);
 /* USER CODE BEGIN PFP */
 
 void KIET_BlinkLED();
@@ -79,7 +83,13 @@ void KIET_encryptData();
 void KIET_macLayer();
 void KIET_macID();
 void KIET_control_low_power_lora();
+void KIET_VH53L0X_init(I2C_HandleTypeDef *handler);
+uint16_t KIET_VL53L0X_ReadDistance();
 
+
+/*Compute*/
+int KIET_COMPUTE_Abs(int value);
+int KIET_COMPUTE_Constraint(int value, int min, int max);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -132,7 +142,9 @@ int main(void)
 //  MX_RTC_Init();
   MX_SPI1_Init();
   MX_USART1_UART_Init();
+  MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
+  KIET_VH53L0X_init(&hi2c1);
   KIET_RTC_Init();
   myLoRa = newLoRa();
   //	LoRa_reset(&myLoRa);
@@ -186,17 +198,17 @@ int main(void)
 
 	  /*Do somthing when WAKUP*/
 
-	  KIET_readSensor();
-	  KIET_encryptData();
-	  KIET_macLayer();
-	  KIET_macID();
+	  printf("ReadSensor -> Distance = %d\n", KIET_VL53L0X_ReadDistance());
+//	  KIET_encryptData();
+//	  KIET_macLayer();
+//	  KIET_macID();
 	  /*Create Data;*/
 	  send_data[0] = 0x30; // MY ADDRESS
 	  for(int i=0; i<26; i++) send_data[i+1] = 48+i;
 
 	  /*Transmit Data*/
 		  for (uint8_t i; i < NUM_OF_TIME_TRANSMIT; i++) {
-		  	  uint8_t flag = LoRa_transmit(&myLoRa, send_data, 4, 1000);
+		  	  uint8_t flag = LoRa_transmit(&myLoRa, send_data, 4, 2000);
 			  if (flag) {
 					HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);
 					HAL_Delay(100);
@@ -235,9 +247,9 @@ int main(void)
 	  		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
 	  	}
 	  /*Reset counter to zero*/
-	  KIET_revise();
-	  printf("#GRN#GO TO STAND BY!-!\n");
-	  KIET_EnterStandBy();
+//	  KIET_revise();
+//	  printf("#GRN#GO TO STAND BY!-!\n");
+//	  KIET_EnterStandBy();
   }
   /* USER CODE END 3 */
 }
@@ -287,6 +299,40 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief I2C1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C1_Init(void)
+{
+
+  /* USER CODE BEGIN I2C1_Init 0 */
+
+  /* USER CODE END I2C1_Init 0 */
+
+  /* USER CODE BEGIN I2C1_Init 1 */
+
+  /* USER CODE END I2C1_Init 1 */
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.ClockSpeed = 100000;
+  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C1_Init 2 */
+
+  /* USER CODE END I2C1_Init 2 */
+
 }
 
 /**
@@ -449,8 +495,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(RST_GPIO_Port, RST_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, LED2_Pin|LED1_Pin|GPIO_PIN_7|GPIO_PIN_8
-                          |GPIO_PIN_9, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOB, LED2_Pin|GPIO_PIN_8|GPIO_PIN_9, GPIO_PIN_SET);
 
   /*Configure GPIO pin : DIO0_Pin */
   GPIO_InitStruct.Pin = DIO0_Pin;
@@ -472,10 +517,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(RST_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : LED2_Pin LED1_Pin PB7 PB8
-                           PB9 */
-  GPIO_InitStruct.Pin = LED2_Pin|LED1_Pin|GPIO_PIN_7|GPIO_PIN_8
-                          |GPIO_PIN_9;
+  /*Configure GPIO pins : LED2_Pin PB8 PB9 */
+  GPIO_InitStruct.Pin = LED2_Pin|GPIO_PIN_8|GPIO_PIN_9;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -575,6 +618,7 @@ void KIET_revise() {
 		CLEAR_BIT(RTC->CRL, RTC_CRL_CNF);
 		while (READ_BIT(RTC->CRL, RTC_CRL_RTOFF)==0) {printf("HAL_L2_Ongoing in other command\n %d",READ_BIT(RTC->CRL, RTC_CRL_RTOFF) );}
 }
+
 void KIET_reset_rtc_register() {
 	SET_BIT(RCC->BDCR, RCC_BDCR_BDRST);
 	HAL_Delay(1);
@@ -628,11 +672,52 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 //		HAL_Delay(100);
 //		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
 //		HAL_Delay(100);
-//		LoRa_receive(&myLoRa, read_data, 128);
 //	} else {
 //		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
 //	}
 	printf("#RED# Callback");
+}
+
+
+int KIET_COMPUTE_Abs(int value) {
+	return (value>0)?value:-value;
+}
+
+int KIET_COMPUTE_Constraint(int value, int min, int max) {
+	return (value>max)?max:((value<min)?min:value);
+}
+
+
+void KIET_VH53L0X_init(I2C_HandleTypeDef *handler){
+	initVL53L0X(1, handler);
+	setSignalRateLimit(200);
+	setVcselPulsePeriod(VcselPeriodPreRange, 10);
+	setVcselPulsePeriod(VcselPeriodFinalRange, 14);
+	setMeasurementTimingBudget(300*1000UL);
+}
+
+uint16_t KIET_VL53L0X_ReadDistance() {
+	statInfo_t_VL53L0X status;
+	uint16_t data_distance[20];
+	uint32_t sum = 0;
+	for (uint8_t i=0; i<=19; i++) {
+		data_distance[i] = KIET_COMPUTE_Constraint(readRangeSingleMillimeters(&status), 0, 2000);
+//		HAL_Delay(1);
+		sum+=data_distance[i];
+		printf("Reading Data From VL53L0X -->distance: %dmm\n", data_distance[i]);
+	}
+	uint16_t average = sum/20;
+	printf("Average Data = %dmm\n", average);
+	uint32_t sum_filter = 0;
+	uint8_t  num_of_elements_filter = 0;
+	for (uint8_t i=0; i<=19; i++) {
+		if (abs(data_distance[i]-average)<100) {
+			num_of_elements_filter ++;
+			sum_filter += data_distance[i];
+		}
+	}
+	average = sum_filter/num_of_elements_filter;
+	return average;
 }
 /* USER CODE END 4 */
 
@@ -650,6 +735,8 @@ void Error_Handler(void)
   }
   /* USER CODE END Error_Handler_Debug */
 }
+
+#endif
 
 #ifdef  USE_FULL_ASSERT
 /**
